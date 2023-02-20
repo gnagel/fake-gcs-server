@@ -5,8 +5,10 @@
 package fakestorage
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"runtime"
 	"testing"
@@ -89,6 +91,44 @@ func TestServerClientBucketAttrsAfterCreateBucket(t *testing.T) {
 			}
 			if attrs.VersioningEnabled != versioningEnabled {
 				t.Errorf("wrong bucket props for %q:\nwant versioningEnabled: %t\ngot versioningEnabled: %t", bucketName, versioningEnabled, attrs.VersioningEnabled)
+			}
+
+			const objectName = "test-new-object"
+			const objectContents = "test-content"
+			objectAttrs, err := server.Client().Bucket(bucketName).Object(objectName).Attrs(context.Background())
+			if err == nil {
+				t.Errorf("expected no object to be found")
+			}
+			if objectAttrs != nil {
+				t.Errorf("expected object attrs to be nil")
+			}
+
+			writer := server.Client().Bucket(bucketName).Object(objectName).NewWriter(context.Background())
+			if _, err = io.Copy(writer, bytes.NewBufferString(objectContents)); err != nil {
+				t.Errorf("expected to create writer")
+			}
+			if err = writer.Close(); err != nil {
+				t.Errorf("expected writer to close")
+			}
+
+			//for index := 0; index < 5; index++ {
+			//	_, err := server.Client().Bucket(bucketName).Object(objectName).Attrs(context.Background())
+			//	if nil == err {
+			//		break
+			//	}
+			//	time.Sleep(30 * time.Second)
+			//}
+
+			reader, err := server.Client().Bucket(bucketName).Object(objectName).NewReader(context.Background())
+			if err != nil || reader == nil {
+				t.Errorf("expected reader to be created")
+			}
+			buf := new(bytes.Buffer)
+			if _, err = io.Copy(buf, reader); err != nil {
+				t.Errorf("expected to create writer")
+			}
+			if buf.String() != objectContents {
+				t.Errorf("expected contents to match")
 			}
 		})
 	}
